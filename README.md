@@ -2,7 +2,8 @@
 
 ESPHome firmware configuration and custom **CST3240** capacitive touch driver for the **LilyGO T-Panel S3** (ESP32-S3 + 4.0" 480x480 ST7701S RGB IPS display).
 
-This repository provides an out-of-the-box working setup for running modern ESPHome and LVGL on the LilyGO T-Panel S3, resolving common community hardware hurdles (such as broken touch reads, missing repeated-start I2C transactions, and PSRAM framebuffer allocation).
+> **Why this repository exists**:  
+> I put this repository together because it took a long time to get this board working properly, and I had not seen anyone else using it successfully as a Home Assistant remote. The LilyGO T-Panel S3 is a fantastic device for this purpose, with a glorious 4.0-inch screen, responsive capacitive touch, and a built-in kickstand. This project resolves the hardware quirks (broken touch reads, missing repeated-start I2C transactions, and PSRAM framebuffer allocation) so you can flash and use it directly.
 
 ---
 
@@ -56,12 +57,21 @@ This repository provides an out-of-the-box working setup for running modern ESPH
 
 ## Dashboard Features
 
-The included [lilygo-t-panel-s3.yaml](lilygo-t-panel-s3.yaml) provides a dark-mode LVGL user interface:
+The repository includes ready-to-flash setups for multiple panels:
+* **Downstairs Panel** ([lilygo-t-panel-s3.yaml](lilygo-t-panel-s3.yaml))
+* **Upstairs Panel** ([lilygo-t-panel-upstairs.yaml](lilygo-t-panel-upstairs.yaml))
 
-* **Header Bar**: Displays status and device information with clean typography.
-* **Quick Scenes**: One-tap scene pills ("All Off", "Relax", "Bright").
-* **2x2 Lighting Grid**: Rounded cards with tactile touch feedback for individual lights (Overhead, Kitchen, Dining Room, Living Mood).
-* **Backlight Card**: Interactive slider for dimming or boosting screen brightness in real-time.
+Each panel features:
+* **Environmental & Weather Tiles**:
+  * **INSIDE**: Live indoor temperature and relative humidity from your house sensor.
+  * **OUTSIDE**: Live outdoor temperature and condition text from Home Assistant weather forecast.
+  * **ALL OFF Pill**: Immediate all-lights-off trigger that synchronizes all button states.
+* **5-Stage Discrete Brightness Tap Cycling**:
+  * Tapping any light button steps through Off, Very Low (10%), Low (35%), Medium (70%), Bright (100%), and back to Off.
+  * Instant visual feedback with dynamic color and label changes on touch.
+  * Two-way synchronization with Home Assistant so external physical switches or app changes update the panel.
+* **Low-Profile Backlight Slider**:
+  * Slim 18px horizontal slider with inline label, zero horizontal scrollbar issues, and real-time screen brightness adjustment.
 
 ---
 
@@ -69,7 +79,7 @@ The included [lilygo-t-panel-s3.yaml](lilygo-t-panel-s3.yaml) provides a dark-mo
 
 ### 1. Prerequisites
 
-Ensure you have ESPHome installed (version 2024.x or later recommended):
+Ensure you have ESPHome installed:
 
 ```bash
 pip install esphome
@@ -90,18 +100,19 @@ wifi_ssid: "Your_WiFi_Network"
 wifi_password: "Your_WiFi_Password"
 ```
 
-> **Note**: `secrets.yaml` is listed in `.gitignore` and will never be committed to Git.
-
 ### 3. Compile & Flash
 
 Connect your LilyGO T-Panel S3 via USB (typically `/dev/ttyACM0` on Linux or `COMx` on Windows):
 
 ```bash
-# Compile and flash via USB serial
+# Compile and flash downstairs panel
 esphome run lilygo-t-panel-s3.yaml --device /dev/ttyACM0
+
+# Or compile and flash upstairs panel
+esphome run lilygo-t-panel-upstairs.yaml --device /dev/ttyACM0
 ```
 
-Once flashed, subsequent updates can be deployed wirelessly over your local network:
+Once flashed initially over USB, future updates can be flashed wirelessly over your network:
 
 ```bash
 esphome run lilygo-t-panel-s3.yaml
@@ -110,6 +121,6 @@ esphome run lilygo-t-panel-s3.yaml
 ### 4. Home Assistant Integration
 
 1. In Home Assistant, navigate to **Settings -> Devices & Services**.
-2. The T-Panel should appear automatically under **Discovered Devices**.
+2. The T-Panel will appear under **Discovered Devices**.
 3. Click **Configure** and submit.
-4. Your T-Panel will link directly with your Home Assistant lights and scenes.
+4. Under the integration options for the device, enable **Allow the device to perform Home Assistant actions** so the panel is permitted to toggle and dim lights.
