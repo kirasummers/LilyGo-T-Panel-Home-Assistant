@@ -1,0 +1,22 @@
+# ESPHome build directory & storage
+.esphome/
+
+# Sensitive credentials
+secrets.yaml
+
+# Binaries & build artifacts
+*.bin
+*.elf
+*.factory.bin
+*.ota.bin
+
+# Backups & old test files
+*.bkp.yaml
+*.bak
+*.old
+*~
+.DS_Store
+
+# Python caches
+__pycache__/
+*.py[cod]
