@@ -27,6 +27,18 @@ logger:
 
 api:
   reboot_timeout: 0s
+  on_client_connected:
+    then:
+      - lvgl.label.update:
+          id: ha_status_label
+          text: "HA Connected"
+          text_color: 0x22C55E
+  on_client_disconnected:
+    then:
+      - lvgl.label.update:
+          id: ha_status_label
+          text: "HA Offline"
+          text_color: 0xEF4444
 
 ota:
   - platform: esphome
@@ -124,11 +136,14 @@ lvgl:
         text_font: montserrat_20
 
     - label:
-        x: 350
+        id: ha_status_label
+        x: 320
         y: 22
-        text: "LilyGO S3"
-        text_color: 0x64748B
+        width: 140
+        text: "HA Offline"
+        text_color: 0xEF4444
         text_font: montserrat_14
+        text_align: right
 
     # Subtle divider
     - obj:
