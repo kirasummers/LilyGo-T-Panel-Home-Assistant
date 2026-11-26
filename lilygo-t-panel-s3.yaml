@@ -153,15 +153,10 @@ sensor:
     on_value:
       then:
         - lvgl.label.update:
-            id: indoor_climate_label
+            id: indoor_temp_label
             text: !lambda |-
-              char buf[64];
-              float hum = id(ha_indoor_hum).state;
-              if (isnan(hum)) {
-                snprintf(buf, sizeof(buf), "Inside: %.1f°C", x);
-              } else {
-                snprintf(buf, sizeof(buf), "Inside: %.1f°C  •  %.0f%%", x, hum);
-              }
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f°C", x);
               return std::string(buf);
 
   - platform: homeassistant
@@ -170,15 +165,10 @@ sensor:
     on_value:
       then:
         - lvgl.label.update:
-            id: indoor_climate_label
+            id: indoor_hum_label
             text: !lambda |-
-              char buf[64];
-              float temp = id(ha_indoor_temp).state;
-              if (isnan(temp)) {
-                snprintf(buf, sizeof(buf), "Inside: --  •  %.0f%%", x);
-              } else {
-                snprintf(buf, sizeof(buf), "Inside: %.1f°C  •  %.0f%%", temp, x);
-              }
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.0f%% RH", x);
               return std::string(buf);
 
   - platform: homeassistant
@@ -188,15 +178,10 @@ sensor:
     on_value:
       then:
         - lvgl.label.update:
-            id: outdoor_weather_label
+            id: outdoor_temp_label
             text: !lambda |-
-              char buf[64];
-              std::string cond = id(ha_weather_cond).state;
-              if (cond.empty()) {
-                snprintf(buf, sizeof(buf), "Outside: %.1f°C", x);
-              } else {
-                snprintf(buf, sizeof(buf), "Outside: %.1f°C  •  %s", x, cond.c_str());
-              }
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f°C", x);
               return std::string(buf);
 
 text_sensor:
@@ -206,10 +191,8 @@ text_sensor:
     on_value:
       then:
         - lvgl.label.update:
-            id: outdoor_weather_label
+            id: weather_cond_label
             text: !lambda |-
-              char buf[64];
-              float temp = id(ha_outdoor_temp).state;
               std::string cond = x;
               if (!cond.empty()) {
                 cond[0] = toupper(cond[0]);
@@ -220,12 +203,7 @@ text_sensor:
                   }
                 }
               }
-              if (isnan(temp)) {
-                snprintf(buf, sizeof(buf), "Outside: %s", cond.c_str());
-              } else {
-                snprintf(buf, sizeof(buf), "Outside: %.1f°C  •  %s", temp, cond.c_str());
-              }
-              return std::string(buf);
+              return cond;
 
 # Home Assistant light state tracking
 binary_sensor:
@@ -245,7 +223,6 @@ binary_sensor:
         - lambda: |-
             if (id(step_living) == 0) {
               id(step_living) = 4;
-              // Only update display if not actively cycling
             }
         - if:
             condition:
@@ -884,7 +861,7 @@ lvgl:
     # --- Top Navigation / Header Bar ---
     - label:
         x: 20
-        y: 14
+        y: 12
         text: "Home Assistant"
         text_color: 0xF1F5F9
         text_font: montserrat_18
@@ -892,54 +869,97 @@ lvgl:
     - label:
         id: ha_status_label
         x: 300
-        y: 16
+        y: 14
         width: 160
         text: "HA Offline"
         text_color: 0xEF4444
         text_font: montserrat_14
         text_align: right
 
-    # --- Environmental Overview & All Off Pill ---
+    # --- Environmental Cards & All Off Pill ---
+    # Card 1: Inside Climate
     - obj:
         x: 20
-        y: 42
-        width: 285
-        height: 60
-        radius: 10
-        bg_color: 0x18202F
+        y: 38
+        width: 140
+        height: 72
+        radius: 12
+        bg_color: 0x151D2A
         border_width: 1
-        border_color: 0x2A374F
+        border_color: 0x233249
         scrollable: false
         scrollbar_mode: "OFF"
         pad_all: 0
         widgets:
           - label:
-              id: indoor_climate_label
               x: 12
               y: 8
-              text: "Inside: --.-°C  •  --%"
+              text: "INSIDE"
               text_color: 0x38BDF8
-              text_font: montserrat_14
-
+              text_font: montserrat_12
           - label:
-              id: outdoor_weather_label
+              id: indoor_temp_label
               x: 12
-              y: 32
-              text: "Outside: --.-°C  •  --"
+              y: 24
+              text: "--.-°C"
+              text_color: 0xF8FAFC
+              text_font: montserrat_20
+          - label:
+              id: indoor_hum_label
+              x: 12
+              y: 48
+              text: "--% RH"
               text_color: 0x94A3B8
-              text_font: montserrat_14
+              text_font: montserrat_12
 
+    # Card 2: Outside Weather
+    - obj:
+        x: 170
+        y: 38
+        width: 155
+        height: 72
+        radius: 12
+        bg_color: 0x151D2A
+        border_width: 1
+        border_color: 0x233249
+        scrollable: false
+        scrollbar_mode: "OFF"
+        pad_all: 0
+        widgets:
+          - label:
+              x: 12
+              y: 8
+              text: "OUTSIDE"
+              text_color: 0xFBBF24
+              text_font: montserrat_12
+          - label:
+              id: outdoor_temp_label
+              x: 12
+              y: 24
+              text: "--.-°C"
+              text_color: 0xF8FAFC
+              text_font: montserrat_20
+          - label:
+              id: weather_cond_label
+              x: 12
+              y: 48
+              text: "Waiting..."
+              text_color: 0x94A3B8
+              text_font: montserrat_12
+
+    # Card 3: All Off Pill Button
     - button:
         id: btn_all_off
-        x: 315
-        y: 42
-        width: 145
-        height: 60
-        radius: 10
-        bg_color: 0x2D1B22
+        x: 335
+        y: 38
+        width: 125
+        height: 72
+        radius: 12
+        bg_color: 0x281419
         border_width: 1
         border_color: 0x991B1B
-        text: "All Off"
+        text: "ALL OFF"
+        text_font: montserrat_16
         on_click:
           - homeassistant.service:
               service: light.turn_off
@@ -952,9 +972,9 @@ lvgl:
     - button:
         id: btn_living
         x: 20
-        y: 114
+        y: 122
         width: 212
-        height: 66
+        height: 76
         radius: 12
         bg_color: 0x18202F
         border_width: 1
@@ -966,9 +986,9 @@ lvgl:
     - button:
         id: btn_kitchen
         x: 248
-        y: 114
+        y: 122
         width: 212
-        height: 66
+        height: 76
         radius: 12
         bg_color: 0x18202F
         border_width: 1
@@ -981,9 +1001,9 @@ lvgl:
     - button:
         id: btn_dining
         x: 20
-        y: 190
+        y: 210
         width: 212
-        height: 66
+        height: 76
         radius: 12
         bg_color: 0x18202F
         border_width: 1
@@ -995,9 +1015,9 @@ lvgl:
     - button:
         id: btn_mood
         x: 248
-        y: 190
+        y: 210
         width: 212
-        height: 66
+        height: 76
         radius: 12
         bg_color: 0x18202F
         border_width: 1
@@ -1010,9 +1030,9 @@ lvgl:
     - button:
         id: btn_tom
         x: 20
-        y: 266
+        y: 298
         width: 212
-        height: 66
+        height: 76
         radius: 12
         bg_color: 0x18202F
         border_width: 1
@@ -1024,9 +1044,9 @@ lvgl:
     - button:
         id: btn_jerry
         x: 248
-        y: 266
+        y: 298
         width: 212
-        height: 66
+        height: 76
         radius: 12
         bg_color: 0x18202F
         border_width: 1
@@ -1035,33 +1055,33 @@ lvgl:
         on_click:
           - script.execute: cycle_jerry
 
-    # --- Backlight Slider Card at Bottom ---
+    # --- Sleek Backlight Slider Card at Bottom ---
     - obj:
         x: 20
-        y: 346
+        y: 392
         width: 440
-        height: 114
-        radius: 14
-        bg_color: 0x18202F
+        height: 64
+        radius: 12
+        bg_color: 0x151D2A
         border_width: 1
-        border_color: 0x2A374F
+        border_color: 0x233249
         scrollable: false
         scrollbar_mode: "OFF"
         pad_all: 0
         widgets:
           - label:
-              x: 20
-              y: 12
-              text: "Display Backlight"
+              x: 18
+              y: 22
+              text: "Backlight"
               text_color: 0x94A3B8
               text_font: montserrat_14
 
           - slider:
-              x: 25
-              y: 48
-              width: 390
-              height: 28
-              radius: 14
+              x: 110
+              y: 23
+              width: 310
+              height: 18
+              radius: 9
               min_value: 10
               max_value: 100
               value: 80
