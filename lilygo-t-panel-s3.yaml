@@ -82,6 +82,17 @@ touchscreen:
       x_max: 480
       y_min: 0
       y_max: 480
+    on_touch:
+      - if:
+          condition:
+            lambda: 'return !id(lcd_backlight).current_values.is_on();'
+          then:
+            - light.turn_on:
+                id: lcd_backlight
+                brightness: 50%
+            - lvgl.slider.update:
+                id: backlight_slider
+                value: 50
 
 # Backlight on GPIO14
 output:
@@ -90,7 +101,7 @@ output:
     pin: 14
     frequency: 1220Hz
     inverted: false
-    min_power: 10%
+    min_power: 0%
 
 light:
   - platform: monochromatic
@@ -1077,15 +1088,23 @@ lvgl:
               text_font: montserrat_14
 
           - slider:
+              id: backlight_slider
               x: 110
               y: 23
               width: 310
               height: 18
               radius: 9
-              min_value: 10
+              min_value: 0
               max_value: 100
               value: 80
               on_value:
-                - light.turn_on:
-                    id: lcd_backlight
-                    brightness: !lambda "return x / 100.0;"
+                - if:
+                    condition:
+                      lambda: 'return x <= 0;'
+                    then:
+                      - light.turn_off:
+                          id: lcd_backlight
+                    else:
+                      - light.turn_on:
+                          id: lcd_backlight
+                          brightness: !lambda "return x / 100.0;"
