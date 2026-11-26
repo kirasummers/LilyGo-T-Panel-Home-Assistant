@@ -106,10 +106,10 @@ spi:
   - id: lcd_spi
     interface: software
     mosi_pin:
-      xl9535:
+      xl9535: expander
       number: 16
     clk_pin:
-      xl9535:
+      xl9535: expander
       number: 15
 
 # 480x480 RGB display
@@ -117,6 +117,760 @@ display:
   - platform: mipi_rgb
     model: t-panel-s3
     id: st7701s_disp
+
+# Discrete brightness states: 0=Off, 1=Very Low (10%), 2=Low (35%), 3=Medium (70%), 4=Bright (100%)
+globals:
+  - id: step_living
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: step_kitchen
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: step_dining
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: step_mood
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: step_tom
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: step_jerry
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+# Home Assistant environmental sensors
+sensor:
+  - platform: homeassistant
+    id: ha_indoor_temp
+    entity_id: sensor.t_h_sensor_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: indoor_climate_label
+            text: !lambda |-
+              char buf[64];
+              float hum = id(ha_indoor_hum).state;
+              if (isnan(hum)) {
+                snprintf(buf, sizeof(buf), "Inside: %.1f°C", x);
+              } else {
+                snprintf(buf, sizeof(buf), "Inside: %.1f°C  •  %.0f%%", x, hum);
+              }
+              return std::string(buf);
+
+  - platform: homeassistant
+    id: ha_indoor_hum
+    entity_id: sensor.t_h_sensor_humidity
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: indoor_climate_label
+            text: !lambda |-
+              char buf[64];
+              float temp = id(ha_indoor_temp).state;
+              if (isnan(temp)) {
+                snprintf(buf, sizeof(buf), "Inside: --  •  %.0f%%", x);
+              } else {
+                snprintf(buf, sizeof(buf), "Inside: %.1f°C  •  %.0f%%", temp, x);
+              }
+              return std::string(buf);
+
+  - platform: homeassistant
+    id: ha_outdoor_temp
+    entity_id: weather.forecast_home
+    attribute: temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: outdoor_weather_label
+            text: !lambda |-
+              char buf[64];
+              std::string cond = id(ha_weather_cond).state;
+              if (cond.empty()) {
+                snprintf(buf, sizeof(buf), "Outside: %.1f°C", x);
+              } else {
+                snprintf(buf, sizeof(buf), "Outside: %.1f°C  •  %s", x, cond.c_str());
+              }
+              return std::string(buf);
+
+text_sensor:
+  - platform: homeassistant
+    id: ha_weather_cond
+    entity_id: weather.forecast_home
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: outdoor_weather_label
+            text: !lambda |-
+              char buf[64];
+              float temp = id(ha_outdoor_temp).state;
+              std::string cond = x;
+              if (!cond.empty()) {
+                cond[0] = toupper(cond[0]);
+                for (size_t i = 1; i < cond.size(); ++i) {
+                  if (cond[i] == '-' || cond[i] == '_') {
+                    cond[i] = ' ';
+                    if (i + 1 < cond.size()) cond[i + 1] = toupper(cond[i + 1]);
+                  }
+                }
+              }
+              if (isnan(temp)) {
+                snprintf(buf, sizeof(buf), "Outside: %s", cond.c_str());
+              } else {
+                snprintf(buf, sizeof(buf), "Outside: %.1f°C  •  %s", temp, cond.c_str());
+              }
+              return std::string(buf);
+
+# Home Assistant light state tracking
+binary_sensor:
+  - platform: homeassistant
+    id: ha_state_living
+    entity_id: light.overhead_lights
+    on_release:
+      then:
+        - lambda: 'id(step_living) = 0;'
+        - lvgl.button.update:
+            id: btn_living
+            bg_color: 0x18202F
+            border_color: 0x2A374F
+            text: "Living Room\nOff"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(step_living) == 0) {
+              id(step_living) = 4;
+              // Only update display if not actively cycling
+            }
+        - if:
+            condition:
+              lambda: 'return id(step_living) == 4;'
+            then:
+              - lvgl.button.update:
+                  id: btn_living
+                  bg_color: 0x3B82F6
+                  border_color: 0x93C5FD
+                  text: "Living Room\nBright"
+
+  - platform: homeassistant
+    id: ha_state_kitchen
+    entity_id: light.kitchen_lights
+    on_release:
+      then:
+        - lambda: 'id(step_kitchen) = 0;'
+        - lvgl.button.update:
+            id: btn_kitchen
+            bg_color: 0x18202F
+            border_color: 0x2A374F
+            text: "Kitchen\nOff"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(step_kitchen) == 0) {
+              id(step_kitchen) = 4;
+            }
+        - if:
+            condition:
+              lambda: 'return id(step_kitchen) == 4;'
+            then:
+              - lvgl.button.update:
+                  id: btn_kitchen
+                  bg_color: 0x3B82F6
+                  border_color: 0x93C5FD
+                  text: "Kitchen\nBright"
+
+  - platform: homeassistant
+    id: ha_state_dining
+    entity_id: light.dining_room_lights
+    on_release:
+      then:
+        - lambda: 'id(step_dining) = 0;'
+        - lvgl.button.update:
+            id: btn_dining
+            bg_color: 0x18202F
+            border_color: 0x2A374F
+            text: "Dining Room\nOff"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(step_dining) == 0) {
+              id(step_dining) = 4;
+            }
+        - if:
+            condition:
+              lambda: 'return id(step_dining) == 4;'
+            then:
+              - lvgl.button.update:
+                  id: btn_dining
+                  bg_color: 0x3B82F6
+                  border_color: 0x93C5FD
+                  text: "Dining Room\nBright"
+
+  - platform: homeassistant
+    id: ha_state_mood
+    entity_id: light.living_room_mood_lights
+    on_release:
+      then:
+        - lambda: 'id(step_mood) = 0;'
+        - lvgl.button.update:
+            id: btn_mood
+            bg_color: 0x18202F
+            border_color: 0x2A374F
+            text: "Living Mood\nOff"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(step_mood) == 0) {
+              id(step_mood) = 4;
+            }
+        - if:
+            condition:
+              lambda: 'return id(step_mood) == 4;'
+            then:
+              - lvgl.button.update:
+                  id: btn_mood
+                  bg_color: 0x3B82F6
+                  border_color: 0x93C5FD
+                  text: "Living Mood\nBright"
+
+  - platform: homeassistant
+    id: ha_state_tom
+    entity_id: light.tom
+    on_release:
+      then:
+        - lambda: 'id(step_tom) = 0;'
+        - lvgl.button.update:
+            id: btn_tom
+            bg_color: 0x18202F
+            border_color: 0x2A374F
+            text: "Tom\nOff"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(step_tom) == 0) {
+              id(step_tom) = 4;
+            }
+        - if:
+            condition:
+              lambda: 'return id(step_tom) == 4;'
+            then:
+              - lvgl.button.update:
+                  id: btn_tom
+                  bg_color: 0x3B82F6
+                  border_color: 0x93C5FD
+                  text: "Tom\nBright"
+
+  - platform: homeassistant
+    id: ha_state_jerry
+    entity_id: light.jerry
+    on_release:
+      then:
+        - lambda: 'id(step_jerry) = 0;'
+        - lvgl.button.update:
+            id: btn_jerry
+            bg_color: 0x18202F
+            border_color: 0x2A374F
+            text: "Jerry\nOff"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(step_jerry) == 0) {
+              id(step_jerry) = 4;
+            }
+        - if:
+            condition:
+              lambda: 'return id(step_jerry) == 4;'
+            then:
+              - lvgl.button.update:
+                  id: btn_jerry
+                  bg_color: 0x3B82F6
+                  border_color: 0x93C5FD
+                  text: "Jerry\nBright"
+
+# Light control cycling scripts
+script:
+  - id: cycle_living
+    then:
+      - lambda: 'id(step_living) = (id(step_living) + 1) % 5;'
+      - if:
+          condition:
+            lambda: 'return id(step_living) == 0;'
+          then:
+            - homeassistant.service:
+                service: light.turn_off
+                data:
+                  entity_id: light.overhead_lights
+            - lvgl.button.update:
+                id: btn_living
+                bg_color: 0x18202F
+                border_color: 0x2A374F
+                text: "Living Room\nOff"
+      - if:
+          condition:
+            lambda: 'return id(step_living) == 1;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.overhead_lights
+                  brightness_pct: "10"
+            - lvgl.button.update:
+                id: btn_living
+                bg_color: 0x162A45
+                border_color: 0x2563EB
+                text: "Living Room\nVery Low"
+      - if:
+          condition:
+            lambda: 'return id(step_living) == 2;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.overhead_lights
+                  brightness_pct: "35"
+            - lvgl.button.update:
+                id: btn_living
+                bg_color: 0x1D3A68
+                border_color: 0x3B82F6
+                text: "Living Room\nLow"
+      - if:
+          condition:
+            lambda: 'return id(step_living) == 3;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.overhead_lights
+                  brightness_pct: "70"
+            - lvgl.button.update:
+                id: btn_living
+                bg_color: 0x2563EB
+                border_color: 0x60A5FA
+                text: "Living Room\nMedium"
+      - if:
+          condition:
+            lambda: 'return id(step_living) == 4;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.overhead_lights
+                  brightness_pct: "100"
+            - lvgl.button.update:
+                id: btn_living
+                bg_color: 0x3B82F6
+                border_color: 0x93C5FD
+                text: "Living Room\nBright"
+
+  - id: cycle_kitchen
+    then:
+      - lambda: 'id(step_kitchen) = (id(step_kitchen) + 1) % 5;'
+      - if:
+          condition:
+            lambda: 'return id(step_kitchen) == 0;'
+          then:
+            - homeassistant.service:
+                service: light.turn_off
+                data:
+                  entity_id: light.kitchen_lights
+            - lvgl.button.update:
+                id: btn_kitchen
+                bg_color: 0x18202F
+                border_color: 0x2A374F
+                text: "Kitchen\nOff"
+      - if:
+          condition:
+            lambda: 'return id(step_kitchen) == 1;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.kitchen_lights
+                  brightness_pct: "10"
+            - lvgl.button.update:
+                id: btn_kitchen
+                bg_color: 0x162A45
+                border_color: 0x2563EB
+                text: "Kitchen\nVery Low"
+      - if:
+          condition:
+            lambda: 'return id(step_kitchen) == 2;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.kitchen_lights
+                  brightness_pct: "35"
+            - lvgl.button.update:
+                id: btn_kitchen
+                bg_color: 0x1D3A68
+                border_color: 0x3B82F6
+                text: "Kitchen\nLow"
+      - if:
+          condition:
+            lambda: 'return id(step_kitchen) == 3;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.kitchen_lights
+                  brightness_pct: "70"
+            - lvgl.button.update:
+                id: btn_kitchen
+                bg_color: 0x2563EB
+                border_color: 0x60A5FA
+                text: "Kitchen\nMedium"
+      - if:
+          condition:
+            lambda: 'return id(step_kitchen) == 4;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.kitchen_lights
+                  brightness_pct: "100"
+            - lvgl.button.update:
+                id: btn_kitchen
+                bg_color: 0x3B82F6
+                border_color: 0x93C5FD
+                text: "Kitchen\nBright"
+
+  - id: cycle_dining
+    then:
+      - lambda: 'id(step_dining) = (id(step_dining) + 1) % 5;'
+      - if:
+          condition:
+            lambda: 'return id(step_dining) == 0;'
+          then:
+            - homeassistant.service:
+                service: light.turn_off
+                data:
+                  entity_id: light.dining_room_lights
+            - lvgl.button.update:
+                id: btn_dining
+                bg_color: 0x18202F
+                border_color: 0x2A374F
+                text: "Dining Room\nOff"
+      - if:
+          condition:
+            lambda: 'return id(step_dining) == 1;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.dining_room_lights
+                  brightness_pct: "10"
+            - lvgl.button.update:
+                id: btn_dining
+                bg_color: 0x162A45
+                border_color: 0x2563EB
+                text: "Dining Room\nVery Low"
+      - if:
+          condition:
+            lambda: 'return id(step_dining) == 2;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.dining_room_lights
+                  brightness_pct: "35"
+            - lvgl.button.update:
+                id: btn_dining
+                bg_color: 0x1D3A68
+                border_color: 0x3B82F6
+                text: "Dining Room\nLow"
+      - if:
+          condition:
+            lambda: 'return id(step_dining) == 3;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.dining_room_lights
+                  brightness_pct: "70"
+            - lvgl.button.update:
+                id: btn_dining
+                bg_color: 0x2563EB
+                border_color: 0x60A5FA
+                text: "Dining Room\nMedium"
+      - if:
+          condition:
+            lambda: 'return id(step_dining) == 4;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.dining_room_lights
+                  brightness_pct: "100"
+            - lvgl.button.update:
+                id: btn_dining
+                bg_color: 0x3B82F6
+                border_color: 0x93C5FD
+                text: "Dining Room\nBright"
+
+  - id: cycle_mood
+    then:
+      - lambda: 'id(step_mood) = (id(step_mood) + 1) % 5;'
+      - if:
+          condition:
+            lambda: 'return id(step_mood) == 0;'
+          then:
+            - homeassistant.service:
+                service: light.turn_off
+                data:
+                  entity_id: light.living_room_mood_lights
+            - lvgl.button.update:
+                id: btn_mood
+                bg_color: 0x18202F
+                border_color: 0x2A374F
+                text: "Living Mood\nOff"
+      - if:
+          condition:
+            lambda: 'return id(step_mood) == 1;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.living_room_mood_lights
+                  brightness_pct: "10"
+            - lvgl.button.update:
+                id: btn_mood
+                bg_color: 0x162A45
+                border_color: 0x2563EB
+                text: "Living Mood\nVery Low"
+      - if:
+          condition:
+            lambda: 'return id(step_mood) == 2;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.living_room_mood_lights
+                  brightness_pct: "35"
+            - lvgl.button.update:
+                id: btn_mood
+                bg_color: 0x1D3A68
+                border_color: 0x3B82F6
+                text: "Living Mood\nLow"
+      - if:
+          condition:
+            lambda: 'return id(step_mood) == 3;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.living_room_mood_lights
+                  brightness_pct: "70"
+            - lvgl.button.update:
+                id: btn_mood
+                bg_color: 0x2563EB
+                border_color: 0x60A5FA
+                text: "Living Mood\nMedium"
+      - if:
+          condition:
+            lambda: 'return id(step_mood) == 4;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.living_room_mood_lights
+                  brightness_pct: "100"
+            - lvgl.button.update:
+                id: btn_mood
+                bg_color: 0x3B82F6
+                border_color: 0x93C5FD
+                text: "Living Mood\nBright"
+
+  - id: cycle_tom
+    then:
+      - lambda: 'id(step_tom) = (id(step_tom) + 1) % 5;'
+      - if:
+          condition:
+            lambda: 'return id(step_tom) == 0;'
+          then:
+            - homeassistant.service:
+                service: light.turn_off
+                data:
+                  entity_id: light.tom
+            - lvgl.button.update:
+                id: btn_tom
+                bg_color: 0x18202F
+                border_color: 0x2A374F
+                text: "Tom\nOff"
+      - if:
+          condition:
+            lambda: 'return id(step_tom) == 1;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.tom
+                  brightness_pct: "10"
+            - lvgl.button.update:
+                id: btn_tom
+                bg_color: 0x162A45
+                border_color: 0x2563EB
+                text: "Tom\nVery Low"
+      - if:
+          condition:
+            lambda: 'return id(step_tom) == 2;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.tom
+                  brightness_pct: "35"
+            - lvgl.button.update:
+                id: btn_tom
+                bg_color: 0x1D3A68
+                border_color: 0x3B82F6
+                text: "Tom\nLow"
+      - if:
+          condition:
+            lambda: 'return id(step_tom) == 3;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.tom
+                  brightness_pct: "70"
+            - lvgl.button.update:
+                id: btn_tom
+                bg_color: 0x2563EB
+                border_color: 0x60A5FA
+                text: "Tom\nMedium"
+      - if:
+          condition:
+            lambda: 'return id(step_tom) == 4;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.tom
+                  brightness_pct: "100"
+            - lvgl.button.update:
+                id: btn_tom
+                bg_color: 0x3B82F6
+                border_color: 0x93C5FD
+                text: "Tom\nBright"
+
+  - id: cycle_jerry
+    then:
+      - lambda: 'id(step_jerry) = (id(step_jerry) + 1) % 5;'
+      - if:
+          condition:
+            lambda: 'return id(step_jerry) == 0;'
+          then:
+            - homeassistant.service:
+                service: light.turn_off
+                data:
+                  entity_id: light.jerry
+            - lvgl.button.update:
+                id: btn_jerry
+                bg_color: 0x18202F
+                border_color: 0x2A374F
+                text: "Jerry\nOff"
+      - if:
+          condition:
+            lambda: 'return id(step_jerry) == 1;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.jerry
+                  brightness_pct: "10"
+            - lvgl.button.update:
+                id: btn_jerry
+                bg_color: 0x162A45
+                border_color: 0x2563EB
+                text: "Jerry\nVery Low"
+      - if:
+          condition:
+            lambda: 'return id(step_jerry) == 2;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.jerry
+                  brightness_pct: "35"
+            - lvgl.button.update:
+                id: btn_jerry
+                bg_color: 0x1D3A68
+                border_color: 0x3B82F6
+                text: "Jerry\nLow"
+      - if:
+          condition:
+            lambda: 'return id(step_jerry) == 3;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.jerry
+                  brightness_pct: "70"
+            - lvgl.button.update:
+                id: btn_jerry
+                bg_color: 0x2563EB
+                border_color: 0x60A5FA
+                text: "Jerry\nMedium"
+      - if:
+          condition:
+            lambda: 'return id(step_jerry) == 4;'
+          then:
+            - homeassistant.service:
+                service: light.turn_on
+                data:
+                  entity_id: light.jerry
+                  brightness_pct: "100"
+            - lvgl.button.update:
+                id: btn_jerry
+                bg_color: 0x3B82F6
+                border_color: 0x93C5FD
+                text: "Jerry\nBright"
+
+  - id: reset_all_buttons
+    then:
+      - lambda: |-
+          id(step_living) = 0;
+          id(step_kitchen) = 0;
+          id(step_dining) = 0;
+          id(step_mood) = 0;
+          id(step_tom) = 0;
+          id(step_jerry) = 0;
+      - lvgl.button.update:
+          id: btn_living
+          bg_color: 0x18202F
+          border_color: 0x2A374F
+          text: "Living Room\nOff"
+      - lvgl.button.update:
+          id: btn_kitchen
+          bg_color: 0x18202F
+          border_color: 0x2A374F
+          text: "Kitchen\nOff"
+      - lvgl.button.update:
+          id: btn_dining
+          bg_color: 0x18202F
+          border_color: 0x2A374F
+          text: "Dining Room\nOff"
+      - lvgl.button.update:
+          id: btn_mood
+          bg_color: 0x18202F
+          border_color: 0x2A374F
+          text: "Living Mood\nOff"
+      - lvgl.button.update:
+          id: btn_tom
+          bg_color: 0x18202F
+          border_color: 0x2A374F
+          text: "Tom\nOff"
+      - lvgl.button.update:
+          id: btn_jerry
+          bg_color: 0x18202F
+          border_color: 0x2A374F
+          text: "Jerry\nOff"
 
 # Dashboard UI
 lvgl:
@@ -130,97 +884,87 @@ lvgl:
     # --- Top Navigation / Header Bar ---
     - label:
         x: 20
-        y: 18
+        y: 14
         text: "Home Assistant"
         text_color: 0xF1F5F9
-        text_font: montserrat_20
+        text_font: montserrat_18
 
     - label:
         id: ha_status_label
-        x: 320
-        y: 22
-        width: 140
+        x: 300
+        y: 16
+        width: 160
         text: "HA Offline"
         text_color: 0xEF4444
         text_font: montserrat_14
         text_align: right
 
-    # Subtle divider
+    # --- Environmental Overview & All Off Pill ---
     - obj:
         x: 20
-        y: 52
-        width: 440
-        height: 2
-        bg_color: 0x1E293B
-        border_width: 0
-
-    # --- Quick Scene Pills ---
-    - button:
-        x: 20
-        y: 66
-        width: 135
-        height: 42
+        y: 42
+        width: 285
+        height: 60
         radius: 10
-        bg_color: 0x1E293B
+        bg_color: 0x18202F
         border_width: 1
-        border_color: 0x334155
+        border_color: 0x2A374F
+        scrollable: false
+        scrollbar_mode: "OFF"
+        pad_all: 0
+        widgets:
+          - label:
+              id: indoor_climate_label
+              x: 12
+              y: 8
+              text: "Inside: --.-°C  •  --%"
+              text_color: 0x38BDF8
+              text_font: montserrat_14
+
+          - label:
+              id: outdoor_weather_label
+              x: 12
+              y: 32
+              text: "Outside: --.-°C  •  --"
+              text_color: 0x94A3B8
+              text_font: montserrat_14
+
+    - button:
+        id: btn_all_off
+        x: 315
+        y: 42
+        width: 145
+        height: 60
+        radius: 10
+        bg_color: 0x2D1B22
+        border_width: 1
+        border_color: 0x991B1B
         text: "All Off"
         on_click:
           - homeassistant.service:
               service: light.turn_off
               data:
                 entity_id: all
-
-    - button:
-        x: 172
-        y: 66
-        width: 135
-        height: 42
-        radius: 10
-        bg_color: 0x1E293B
-        border_width: 1
-        border_color: 0x334155
-        text: "Relax"
-        on_click:
-          - homeassistant.service:
-              service: scene.turn_on
-              data:
-                entity_id: scene.relax
-
-    - button:
-        x: 325
-        y: 66
-        width: 135
-        height: 42
-        radius: 10
-        bg_color: 0x1E293B
-        border_width: 1
-        border_color: 0x334155
-        text: "Bright"
-        on_click:
-          - homeassistant.service:
-              service: light.turn_on
-              data:
-                entity_id: light.overhead_lights
+          - script.execute: reset_all_buttons
 
     # --- 6 Button Grid ---
+    # Row 1: Living Room | Kitchen
     - button:
+        id: btn_living
         x: 20
         y: 114
         width: 212
         height: 66
         radius: 12
-        bg_color: 0x1E2D44
-        border_width: 2
-        border_color: 0x3B82F6
-        text: "Study Light"
+        bg_color: 0x18202F
+        border_width: 1
+        border_color: 0x2A374F
+        text: "Living Room\nOff"
         on_click:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.study_light
+          - script.execute: cycle_living
 
     - button:
+        id: btn_kitchen
         x: 248
         y: 114
         width: 212
@@ -229,14 +973,13 @@ lvgl:
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
-        text: "Overhead"
+        text: "Kitchen\nOff"
         on_click:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.overhead_lights
+          - script.execute: cycle_kitchen
 
+    # Row 2: Dining Room | Living Mood
     - button:
+        id: btn_dining
         x: 20
         y: 190
         width: 212
@@ -245,14 +988,12 @@ lvgl:
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
-        text: "Kitchen"
+        text: "Dining Room\nOff"
         on_click:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.kitchen_lights
+          - script.execute: cycle_dining
 
     - button:
+        id: btn_mood
         x: 248
         y: 190
         width: 212
@@ -261,14 +1002,13 @@ lvgl:
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
-        text: "Dining Room"
+        text: "Living Mood\nOff"
         on_click:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.dining_room_lights
+          - script.execute: cycle_mood
 
+    # Row 3: Tom | Jerry
     - button:
+        id: btn_tom
         x: 20
         y: 266
         width: 212
@@ -277,14 +1017,12 @@ lvgl:
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
-        text: "Living Mood"
+        text: "Tom\nOff"
         on_click:
-          - homeassistant.service:
-              service: light.toggle
-              data:
-                entity_id: light.living_room_mood_lights
+          - script.execute: cycle_tom
 
     - button:
+        id: btn_jerry
         x: 248
         y: 266
         width: 212
@@ -293,35 +1031,35 @@ lvgl:
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
-        text: "All Lights Off"
+        text: "Jerry\nOff"
         on_click:
-          - homeassistant.service:
-              service: light.turn_off
-              data:
-                entity_id: all
+          - script.execute: cycle_jerry
 
     # --- Backlight Slider Card at Bottom ---
     - obj:
         x: 20
-        y: 348
+        y: 346
         width: 440
-        height: 110
+        height: 114
         radius: 14
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
+        scrollable: false
+        scrollbar_mode: "OFF"
+        pad_all: 0
         widgets:
           - label:
-              x: 14
+              x: 20
               y: 12
               text: "Display Backlight"
               text_color: 0x94A3B8
               text_font: montserrat_14
 
           - slider:
-              x: 14
+              x: 25
               y: 48
-              width: 412
+              width: 390
               height: 28
               radius: 14
               min_value: 10
