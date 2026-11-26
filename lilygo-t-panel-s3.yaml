@@ -188,13 +188,29 @@ lvgl:
               data:
                 entity_id: light.overhead_lights
 
-    # --- 2x2 Grid of Main Lights ---
+    # --- 6 Button Grid ---
     - button:
         x: 20
-        y: 122
+        y: 114
         width: 212
-        height: 104
-        radius: 14
+        height: 66
+        radius: 12
+        bg_color: 0x1E2D44
+        border_width: 2
+        border_color: 0x3B82F6
+        text: "Study Light"
+        on_click:
+          - homeassistant.service:
+              service: light.toggle
+              data:
+                entity_id: light.study_light
+
+    - button:
+        x: 248
+        y: 114
+        width: 212
+        height: 66
+        radius: 12
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
@@ -206,11 +222,11 @@ lvgl:
                 entity_id: light.overhead_lights
 
     - button:
-        x: 248
-        y: 122
+        x: 20
+        y: 190
         width: 212
-        height: 104
-        radius: 14
+        height: 66
+        radius: 12
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
@@ -222,11 +238,11 @@ lvgl:
                 entity_id: light.kitchen_lights
 
     - button:
-        x: 20
-        y: 238
+        x: 248
+        y: 190
         width: 212
-        height: 104
-        radius: 14
+        height: 66
+        radius: 12
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
@@ -238,11 +254,11 @@ lvgl:
                 entity_id: light.dining_room_lights
 
     - button:
-        x: 248
-        y: 238
+        x: 20
+        y: 266
         width: 212
-        height: 104
-        radius: 14
+        height: 66
+        radius: 12
         bg_color: 0x18202F
         border_width: 1
         border_color: 0x2A374F
@@ -253,12 +269,28 @@ lvgl:
               data:
                 entity_id: light.living_room_mood_lights
 
+    - button:
+        x: 248
+        y: 266
+        width: 212
+        height: 66
+        radius: 12
+        bg_color: 0x18202F
+        border_width: 1
+        border_color: 0x2A374F
+        text: "All Lights Off"
+        on_click:
+          - homeassistant.service:
+              service: light.turn_off
+              data:
+                entity_id: all
+
     # --- Backlight Slider Card at Bottom ---
     - obj:
         x: 20
-        y: 356
+        y: 348
         width: 440
-        height: 106
+        height: 110
         radius: 14
         bg_color: 0x18202F
         border_width: 1
@@ -273,7 +305,7 @@ lvgl:
 
           - slider:
               x: 14
-              y: 44
+              y: 48
               width: 412
               height: 28
               radius: 14
